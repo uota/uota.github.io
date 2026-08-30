@@ -224,12 +224,14 @@ C_mode = min(1, C_base + C_top)
 
 Overlayは、下の色が暗いか明るいかで、Multiply寄りかScreen寄りかを切り替える。
 
-```text
-C_mode = 2 * C_base * C_top
-          (C_base < 0.5)
+条件分岐のある式は、条件を先に書く。
 
+```text
+C_base < 0.5 のとき:
+C_mode = 2 * C_base * C_top
+
+C_base >= 0.5 のとき:
 C_mode = 1 - 2 * (1-C_base) * (1-C_top)
-          (C_base >= 0.5)
 ```
 
 暗い下地ではMultiplyのように暗くなり、明るい下地ではScreenのように明るくなる。中間の `0.5` 付近を基準にコントラストを強める、と考えるとよい。
@@ -259,8 +261,11 @@ Soft Lightは、上の色に応じて、下の色を暗くしたり明るくし�
 代表的な式の一つは次のように書ける。
 
 ```text
-g(x) = ((16*x - 12)*x + 4)*x  (x <= 0.25)
-g(x) = sqrt(x)                (x >  0.25)
+x <= 0.25 のとき:
+g(x) = ((16*x - 12)*x + 4)*x
+
+x > 0.25 のとき:
+g(x) = sqrt(x)
 
 C_top <= 0.5 のとき:
 C_mode = C_base - (1 - 2*C_top) * C_base * (1-C_base)
@@ -280,11 +285,11 @@ C_mode = C_base + (2*C_top - 1) * (g(C_base)-C_base)
 Overlayと似ているが、明るいか暗いかを上の色で判断する。
 
 ```text
+C_top < 0.5 のとき:
 C_mode = 2 * C_base * C_top
-          (C_top < 0.5)
 
+C_top >= 0.5 のとき:
 C_mode = 1 - 2 * (1-C_base) * (1-C_top)
-          (C_top >= 0.5)
 ```
 
 Overlayが「下の画像に光を当てる」感じなら、Hard Lightは「上のレイヤーから強い光を当てる」感じである。強い陰影や光、質感の追加に使われる。
@@ -296,8 +301,11 @@ Overlayが「下の画像に光を当てる」感じなら、Hard Lightは「上
 下の色を暗くしながら、コントラストも強めるモードである。
 
 ```text
-C_mode = 0                                  (C_top = 0)
-C_mode = 1 - (1-C_base) / C_top             (C_top > 0)
+C_top = 0 のとき:
+C_mode = 0
+
+C_top > 0 のとき:
+C_mode = 1 - (1-C_base) / C_top
 ```
 
 結果は通常 `0.0`〜`1.0` に収める。上の色が黒に近づくほど、下の色が急激に暗くなる。
@@ -311,8 +319,11 @@ C_mode = 1 - (1-C_base) / C_top             (C_top > 0)
 Color Burnの反対側で、下の色を明るくしながらコントラストを変えるモードである。
 
 ```text
-C_mode = 1                                  (C_top = 1)
-C_mode = C_base / (1-C_top)                 (C_top < 1)
+C_top = 1 のとき:
+C_mode = 1
+
+C_top < 1 のとき:
+C_mode = C_base / (1-C_top)
 ```
 
 上の色が白に近づくほど、下の色が急激に明るくなる。強い光や発光の芯を作るのに向いているが、明るさが極端になりやすい。
@@ -468,8 +479,11 @@ C_mode = C_base / C_top
 Darkenはチャンネルごとに比較するが、Darker Colorは色全体の明るさを比較して、下か上のどちらか一方の色を選ぶ。
 
 ```text
-sum(C_base) < sum(C_top) なら C_mode = C_base
-それ以外なら             C_mode = C_top
+sum(C_base) < sum(C_top) のとき:
+C_mode = C_base
+
+sum(C_base) >= sum(C_top) のとき:
+C_mode = C_top
 ```
 
 そのため、Darkenのようにチャンネルごとに別々の色を組み合わせることはない。
@@ -481,8 +495,11 @@ sum(C_base) < sum(C_top) なら C_mode = C_base
 Darker Colorの反対で、色全体の明るさが大きいほうを選ぶ。
 
 ```text
-sum(C_base) > sum(C_top) なら C_mode = C_base
-それ以外なら             C_mode = C_top
+sum(C_base) > sum(C_top) のとき:
+C_mode = C_base
+
+sum(C_base) <= sum(C_top) のとき:
+C_mode = C_top
 ```
 
 DarkenとLightenの違いと同じように、チャンネル単位の比較ではなく、色全体の比較である。
@@ -494,8 +511,11 @@ DarkenとLightenの違いと同じように、チャンネル単位の比較で�
 上の色が暗いか明るいかで、Color BurnとColor Dodgeを切り替える。
 
 ```text
-C_top < 0.5 なら Color Burn(C_base, 2*C_top)
-C_top >= 0.5 なら Color Dodge(C_base, 2*(C_top-0.5))
+C_top < 0.5 のとき:
+C_mode = Color Burn(C_base, 2*C_top)
+
+C_top >= 0.5 のとき:
+C_mode = Color Dodge(C_base, 2*(C_top-0.5))
 ```
 
 コントラストの変化が強く、扱いも難しい。強い陰影や極端な光を作るためのモードと考えるとよい。
@@ -517,8 +537,11 @@ C_mode = clamp(C_base + 2*C_top - 1, 0, 1)
 上の色に応じて、DarkenまたはLightenに近い処理を切り替える。
 
 ```text
-C_mode = min(C_base, 2*C_top)       (C_top < 0.5)
-C_mode = max(C_base, 2*C_top - 1)   (C_top >= 0.5)
+C_top < 0.5 のとき:
+C_mode = min(C_base, 2*C_top)
+
+C_top >= 0.5 のとき:
+C_mode = max(C_base, 2*C_top - 1)
 ```
 
 OverlayやSoft Lightよりも、色の置き換わりが目立ちやすい。
@@ -528,8 +551,11 @@ OverlayやSoft Lightよりも、色の置き換わりが目立ちやすい。
 ## Hard Mix（ハードミックス）
 
 ```text
-C_mode = 0  (C_base + C_top < 1)
-C_mode = 1  (C_base + C_top >= 1)
+C_base + C_top < 1 のとき:
+C_mode = 0
+
+C_base + C_top >= 1 のとき:
+C_mode = 1
 ```
 
 各チャンネルの結果を0か1に丸めるため、画像がほとんど二値化される。通常の塗りや調整より、ポスターのような極端な効果に向いている。
