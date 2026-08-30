@@ -7,4 +7,4 @@ permalink: pretty
 
 # GoatCounterで発行されたURLを設定するとアクセス解析が有効になります。
 # 例: https://example.goatcounter.com/count
-goatcounter: ""
+goatcounter: https://ennpitsu.goatcounter.com/count
