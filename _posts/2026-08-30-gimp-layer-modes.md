@@ -12,38 +12,38 @@ date: 2026-08-30
 
 ペイントソフトによって、同じ名前のモードでも細かい処理は違う。そこで、ここでは処理を確認しやすいGIMPをひとつの例にした。GIMPがすべてのソフトの代表という意味ではない。今回は、いろいろなソフトで名前や用途が比較的通じやすいモードに絞る。
 
-## まとめ：この記事で扱うモード
+## この記事で扱うモード
 
-先に全体像を示しておく。モード名をクリックすると、それぞれの説明に移動できる。前半は式と用途を詳しく説明し、後半は式の特徴を短く紹介する。
+先に全体像を示しておく。モード名をクリックすると、それぞれの説明に移動できる。
 
-| モード | 役割 | 扱い |
-| --- | --- | --- |
-| [Normal（通常）](#mode-normal) | 上の色をそのまま重ねる | 詳しく |
-| [Multiply（乗算）](#mode-multiply) | 色を掛けて暗くする | 詳しく |
-| [Screen（スクリーン）](#mode-screen) | 反転して掛けて明るくする | 詳しく |
-| [Add / Linear Dodge（加算）](#mode-add) | 色の値を足して明るくする | 詳しく |
-| [Overlay（オーバーレイ）](#mode-overlay) | 下の明暗でMultiplyとScreenを切り替える | 詳しく |
-| [Soft Light（ソフトライト）](#mode-soft-light) | 明暗を穏やかに動かす | 詳しく |
-| [Hard Light（ハードライト）](#mode-hard-light) | 上の明暗でMultiplyとScreenを切り替える | 詳しく |
-| [Color Burn（焼き込みカラー）](#mode-color-burn) | 暗くしながらコントラストを強める | 詳しく |
-| [Color Dodge（覆い焼きカラー）](#mode-color-dodge) | 明るくしながらコントラストを変える | 詳しく |
-| [Linear Burn（焼き込み（リニア））](#mode-linear-burn) | 暗い方向へ直線的に変化させる | 詳しく |
-| [Difference（差の絶対値）](#mode-difference) | 上下の色の差を取り出す | 詳しく |
-| [Exclusion（除外）](#mode-exclusion) | Differenceより弱い差分を作る | 詳しく |
-| [Hue（色相）](#mode-hue) | 上の色相だけを借りる | 詳しく |
-| [Saturation（彩度）](#mode-saturation) | 上の彩度だけを借りる | 詳しく |
-| [Color（カラー）](#mode-color) | 上の色相と彩度を借りる | 詳しく |
-| [Luminosity（輝度）](#mode-luminosity) | 上の明るさだけを借りる | 詳しく |
-| [Darken（比較（暗））](#mode-darken) | チャンネルごとに暗い方を選ぶ | 短く |
-| [Lighten（比較（明））](#mode-lighten) | チャンネルごとに明るい方を選ぶ | 短く |
-| [Subtract（減算）](#mode-subtract) | 上の色を下の色から引く | 短く |
-| [Divide（除算）](#mode-divide) | 下の色を上の色で割る | 短く |
-| [Darker Color（カラー比較（暗））](#mode-darker-color) | 色全体が暗い方を選ぶ | 短く |
-| [Lighter Color（カラー比較（明））](#mode-lighter-color) | 色全体が明るい方を選ぶ | 短く |
-| [Vivid Light（ビビッドライト）](#mode-vivid-light) | BurnとDodgeを切り替える | 短く |
-| [Linear Light（リニアライト）](#mode-linear-light) | 明るさを直線的に強く動かす | 短く |
-| [Pin Light（ピンライト）](#mode-pin-light) | DarkenとLightenを切り替える | 短く |
-| [Hard Mix（ハードミックス）](#mode-hard-mix) | 各チャンネルをほぼ二値化する | 短く |
+| モード | 役割 |
+| --- | --- |
+| [Normal（通常）](#mode-normal) | 上の色をそのまま重ねる |
+| [Multiply（乗算）](#mode-multiply) | 色を掛けて暗くする |
+| [Screen（スクリーン）](#mode-screen) | 反転して掛けて明るくする |
+| [Add / Linear Dodge（加算）](#mode-add) | 色の値を足して明るくする |
+| [Overlay（オーバーレイ）](#mode-overlay) | 下の明暗でMultiplyとScreenを切り替える |
+| [Soft Light（ソフトライト）](#mode-soft-light) | 明暗を穏やかに動かす |
+| [Hard Light（ハードライト）](#mode-hard-light) | 上の明暗でMultiplyとScreenを切り替える |
+| [Color Burn（焼き込みカラー）](#mode-color-burn) | 暗くしながらコントラストを強める |
+| [Color Dodge（覆い焼きカラー）](#mode-color-dodge) | 明るくしながらコントラストを変える |
+| [Linear Burn（焼き込み（リニア））](#mode-linear-burn) | 暗い方向へ直線的に変化させる |
+| [Difference（差の絶対値）](#mode-difference) | 上下の色の差を取り出す |
+| [Exclusion（除外）](#mode-exclusion) | Differenceより弱い差分を作る |
+| [Hue（色相）](#mode-hue) | 上の色相だけを借りる |
+| [Saturation（彩度）](#mode-saturation) | 上の彩度だけを借りる |
+| [Color（カラー）](#mode-color) | 上の色相と彩度を借りる |
+| [Luminosity（輝度）](#mode-luminosity) | 上の明るさだけを借りる |
+| [Darken（比較（暗））](#mode-darken) | チャンネルごとに暗い方を選ぶ |
+| [Lighten（比較（明））](#mode-lighten) | チャンネルごとに明るい方を選ぶ |
+| [Subtract（減算）](#mode-subtract) | 上の色を下の色から引く |
+| [Divide（除算）](#mode-divide) | 下の色を上の色で割る |
+| [Darker Color（カラー比較（暗））](#mode-darker-color) | 色全体が暗い方を選ぶ |
+| [Lighter Color（カラー比較（明））](#mode-lighter-color) | 色全体が明るい方を選ぶ |
+| [Vivid Light（ビビッドライト）](#mode-vivid-light) | BurnとDodgeを切り替える |
+| [Linear Light（リニアライト）](#mode-linear-light) | 明るさを直線的に強く動かす |
+| [Pin Light（ピンライト）](#mode-pin-light) | DarkenとLightenを切り替える |
+| [Hard Mix（ハードミックス）](#mode-hard-mix) | 各チャンネルをほぼ二値化する |
 
 ## レイヤーモードは「上下の色から新しい色を作る関数」
 
@@ -541,12 +541,6 @@ C_mode = 1  (C_base + C_top >= 1)
 例えば、半透明の黒をMultiplyで重ねても、黒一色にはならない。下の色を黒に近づけるだけである。半透明の白をScreenで重ねても、白一色ではなく、下の色を白に近づける。
 
 この「モードの式」と「透明度による補間」を分けて考えると、レイヤーの不透明度を下げたときの挙動を予想しやすい。
-
-## ソフトによる違いはどこに出るのか
-
-この記事ではGIMPを具体例にしたが、他のペイントソフトで完全に同じ結果になるとは限らない。モードの名前が同じでも、細かい実装や表示のされ方が違うことはある。
-
-それでも、Multiplyは「上下を掛ける」、Screenは「反転して掛けて戻す」、Overlayは「下の明暗で分岐する」という中心部分は、いろいろなソフトを理解するときの共通の足場になる。ここでは、その共通部分をつかむことを優先した。
 
 ## おわりに
 
