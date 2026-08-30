@@ -12,13 +12,60 @@ date: 2026-08-30
 
 ペイントソフトによって、同じ名前のモードでも細かい処理は違う。そこで、ここでは処理を確認しやすいGIMPをひとつの例にした。GIMPがすべてのソフトの代表という意味ではない。今回は、いろいろなソフトで名前や用途が比較的通じやすいモードに絞る。
 
+## まとめ：この記事で扱うモード
+
+先に全体像を示しておく。モード名をクリックすると、それぞれの説明に移動できる。前半は式と用途を詳しく説明し、後半は式の特徴を短く紹介する。
+
+| モード | 役割 | 扱い |
+| --- | --- | --- |
+| [Normal（通常）](#mode-normal) | 上の色をそのまま重ねる | 詳しく |
+| [Multiply（乗算）](#mode-multiply) | 色を掛けて暗くする | 詳しく |
+| [Screen（スクリーン）](#mode-screen) | 反転して掛けて明るくする | 詳しく |
+| [Add / Linear Dodge（加算）](#mode-add) | 色の値を足して明るくする | 詳しく |
+| [Overlay（オーバーレイ）](#mode-overlay) | 下の明暗でMultiplyとScreenを切り替える | 詳しく |
+| [Soft Light（ソフトライト）](#mode-soft-light) | 明暗を穏やかに動かす | 詳しく |
+| [Hard Light（ハードライト）](#mode-hard-light) | 上の明暗でMultiplyとScreenを切り替える | 詳しく |
+| [Color Burn（焼き込みカラー）](#mode-color-burn) | 暗くしながらコントラストを強める | 詳しく |
+| [Color Dodge（覆い焼きカラー）](#mode-color-dodge) | 明るくしながらコントラストを変える | 詳しく |
+| [Linear Burn（焼き込み（リニア））](#mode-linear-burn) | 暗い方向へ直線的に変化させる | 詳しく |
+| [Difference（差の絶対値）](#mode-difference) | 上下の色の差を取り出す | 詳しく |
+| [Exclusion（除外）](#mode-exclusion) | Differenceより弱い差分を作る | 詳しく |
+| [Hue（色相）](#mode-hue) | 上の色相だけを借りる | 詳しく |
+| [Saturation（彩度）](#mode-saturation) | 上の彩度だけを借りる | 詳しく |
+| [Color（カラー）](#mode-color) | 上の色相と彩度を借りる | 詳しく |
+| [Luminosity（輝度）](#mode-luminosity) | 上の明るさだけを借りる | 詳しく |
+| [Darken（比較（暗））](#mode-darken) | チャンネルごとに暗い方を選ぶ | 短く |
+| [Lighten（比較（明））](#mode-lighten) | チャンネルごとに明るい方を選ぶ | 短く |
+| [Subtract（減算）](#mode-subtract) | 上の色を下の色から引く | 短く |
+| [Divide（除算）](#mode-divide) | 下の色を上の色で割る | 短く |
+| [Darker Color（カラー比較（暗））](#mode-darker-color) | 色全体が暗い方を選ぶ | 短く |
+| [Lighter Color（カラー比較（明））](#mode-lighter-color) | 色全体が明るい方を選ぶ | 短く |
+| [Vivid Light（ビビッドライト）](#mode-vivid-light) | BurnとDodgeを切り替える | 短く |
+| [Linear Light（リニアライト）](#mode-linear-light) | 明るさを直線的に強く動かす | 短く |
+| [Pin Light（ピンライト）](#mode-pin-light) | DarkenとLightenを切り替える | 短く |
+| [Hard Mix（ハードミックス）](#mode-hard-mix) | 各チャンネルをほぼ二値化する | 短く |
+
 ## レイヤーモードは「上下の色から新しい色を作る関数」
 
-まず、完全に不透明な2枚のレイヤーを考える。
+まず、完全に不透明な2枚のレイヤーを考える。下のレイヤーの色を下地、上のレイヤーの色を重ねる色と考えると分かりやすい。
+
+レイヤーモードは、その2つの色を入力として、選んだルールで新しい色を作る。まずは記号を使わずに書くと、次のような流れである。
 
 ```text
-C_base = 下のレイヤーの色
-C_top  = 上のレイヤーの色
+下の色 + 上の色 → レイヤーモードのルール → 新しい色
+```
+
+以降の式を短く書くために、この3つの色に名前を付ける。
+
+| 記号 | 意味 |
+| --- | --- |
+| `C_base` | 下のレイヤーの色。下地 |
+| `C_top` | 上のレイヤーの色 |
+| `C_mode` | レイヤーモードが作った新しい色 |
+
+すると、先ほどの流れは次の式になる。
+
+```text
 C_mode = f(C_base, C_top)
 ```
 
@@ -63,9 +110,6 @@ C_out  = アルファ合成(C_base, C_top, C_mode)
 
 | 記号 | 意味 |
 | --- | --- |
-| `C_base` | 下のレイヤーの色。下地 |
-| `C_top` | 上のレイヤーの色 |
-| `C_mode` | モードが計算した色 |
 | `C_out` | 最終的に表示される色 |
 | `a_base` | 下のレイヤーのアルファ |
 | `a_top` | 上のレイヤーのアルファ |
@@ -94,6 +138,8 @@ C_out = a_top' * C_mode + (1 - a_top') * C_base
 
 一方、上のレイヤーが50%不透明なら、乗算で作った色をそのまま表示するのではなく、乗算結果と下の色の間を補間する。レイヤーの不透明度を下げると「乗算の濃さ」が変わるのはこのためである。
 
+<a id="mode-normal"></a>
+
 ## Normal（通常）
 
 上のレイヤーを、そのまま下に重ねるモードである。
@@ -105,6 +151,8 @@ C_mode = C_top
 下のレイヤーが完全に不透明なら、上のレイヤーが100%不透明のときは上の色だけが見える。上が半透明なら、`C_top` と `C_base` の間になる。
 
 「何もしない」ように見えるが、透明度を含めると、Normalはレイヤー合成の基準になる大事なモードである。
+
+<a id="mode-multiply"></a>
 
 ## Multiply（乗算）
 
@@ -123,6 +171,8 @@ C_mode = C_base * C_top
 ```
 
 となる。上のレイヤーを50%不透明にすれば、最終的には `0.4` と `0.8` の間の値になる。
+
+<a id="mode-screen"></a>
 
 ## Screen（スクリーン）
 
@@ -148,6 +198,8 @@ C_mode = C_base + C_top - C_base * C_top
 
 光・ハイライト・発光表現に向いているのは、この性質による。黒背景に描いた光をScreenで重ねると、黒い部分を目立たせずに光だけを載せやすい。
 
+<a id="mode-add"></a>
+
 ## Add / Linear Dodge（加算）
 
 ```text
@@ -165,6 +217,8 @@ C_mode = min(1, C_base + C_top)
 ソフトによっては `Add`、`Addition`、`Linear Dodge (Add)` など名前が異なるが、同じ系統のモードとして扱われることが多い。
 
 発光、強いハイライト、光源の重なりを作るときに使いやすい。Screenよりも、明るさを直接押し上げる感じが強い。
+
+<a id="mode-overlay"></a>
 
 ## Overlay（オーバーレイ）
 
@@ -196,6 +250,8 @@ C_mode = 1 - 2 * (1-C_base) * (1-C_top)
 
 陰影を強めたり、テクスチャを下の明暗に沿わせたり、全体のコントラストを出したりする用途でよく使われる。上のレイヤーを50%グレーにすると、理想化した式では下の色をほぼ変えない。
 
+<a id="mode-soft-light"></a>
+
 ## Soft Light（ソフトライト）
 
 Soft Lightは、上の色に応じて、下の色を暗くしたり明るくしたりするモードである。Overlayよりも変化が穏やかになりやすい。
@@ -217,6 +273,8 @@ C_mode = C_base + (2*C_top - 1) * (g(C_base)-C_base)
 
 実際のソフトでは式の細部が異なることもあるため、ここでは「明暗をやわらかく動かすモード」と捉えるとよい。
 
+<a id="mode-hard-light"></a>
+
 ## Hard Light（ハードライト）
 
 Overlayと似ているが、明るいか暗いかを上の色で判断する。
@@ -231,6 +289,8 @@ C_mode = 1 - 2 * (1-C_base) * (1-C_top)
 
 Overlayが「下の画像に光を当てる」感じなら、Hard Lightは「上のレイヤーから強い光を当てる」感じである。強い陰影や光、質感の追加に使われる。
 
+<a id="mode-color-burn"></a>
+
 ## Color Burn（焼き込みカラー）
 
 下の色を暗くしながら、コントラストも強めるモードである。
@@ -244,6 +304,8 @@ C_mode = 1 - (1-C_base) / C_top             (C_top > 0)
 
 影や濃い色を強く焼き付けたいときに使えるが、Multiplyよりも変化が強い。
 
+<a id="mode-color-dodge"></a>
+
 ## Color Dodge（覆い焼きカラー）
 
 Color Burnの反対側で、下の色を明るくしながらコントラストを変えるモードである。
@@ -255,6 +317,8 @@ C_mode = C_base / (1-C_top)                 (C_top < 1)
 
 上の色が白に近づくほど、下の色が急激に明るくなる。強い光や発光の芯を作るのに向いているが、明るさが極端になりやすい。
 
+<a id="mode-linear-burn"></a>
+
 ## Linear Burn（焼き込み（リニア））
 
 ```text
@@ -262,6 +326,8 @@ C_mode = max(0, C_base + C_top - 1)
 ```
 
 2つの色を足してから `1` を引くので、暗い方向へ直線的に変化する。Subtractと似て見えるが、式は異なる。
+
+<a id="mode-difference"></a>
 
 ## Difference（差の絶対値）
 
@@ -287,6 +353,8 @@ abs(C_base - 1) = 1 - C_base
 
 2枚の画像の位置合わせ、塗り残しや差分の確認、色の比較に便利なモードである。
 
+<a id="mode-exclusion"></a>
+
 ## Exclusion（除外）
 
 Differenceに似ているが、コントラストを弱めたような結果になる。
@@ -296,6 +364,8 @@ C_mode = C_base + C_top - 2 * C_base * C_top
 ```
 
 黒 `0` では変化せず、白 `1` では色が反転する。この性質はDifferenceと同じだが、中間の色ではDifferenceほど強い差になりにくい。
+
+<a id="mode-hue"></a>
 
 ## Hue（色相）
 
@@ -309,6 +379,8 @@ C_mode = HSL(H_top, S_base, L_base)
 
 RGBの赤・緑・青を直接掛けたり足したりするモードではない。「色味だけを変えたい」ときに使う。
 
+<a id="mode-saturation"></a>
+
 ## Saturation（彩度）
 
 上のレイヤーから彩度だけを借り、下のレイヤーの色相と明るさを残す。
@@ -319,6 +391,8 @@ C_mode = HSL(H_base, S_top, L_base)
 
 彩度の低い上の色を使うと、下の色を鮮やかさの少ない方向へ動かせる。
 
+<a id="mode-color"></a>
+
 ## Color（カラー）
 
 上のレイヤーの色相と彩度を使い、下のレイヤーの明るさを残す。
@@ -328,6 +402,8 @@ C_mode = HSL(H_top, S_top, L_base)
 ```
 
 モノクロ画像に色を付けたり、線画や陰影の明るさを保ったまま着色したりするときに便利である。
+
+<a id="mode-luminosity"></a>
 
 ## Luminosity（輝度）
 
@@ -341,6 +417,8 @@ Colorの反対側の使い方で、色味を保ったまま明るさだけを変
 
 ここでのHSLは、色相・彩度・明るさを使って考えるための表記である。色空間の細かな違いまで扱うとソフトごとの差が大きくなるため、この記事ではそこまで踏み込まない。
 
+<a id="mode-darken"></a>
+
 ## Darken（比較（暗））
 
 下と上の色をチャンネルごとに比較し、暗い方を選ぶ。
@@ -350,6 +428,8 @@ C_mode = min(C_base, C_top)
 ```
 
 Multiplyと違って色を混ぜず、各チャンネルの小さい値を選ぶ。暗い線や影だけを残したいときに使われる。
+
+<a id="mode-lighten"></a>
 
 ## Lighten（比較（明））
 
@@ -361,6 +441,8 @@ C_mode = max(C_base, C_top)
 
 黒 `0.0` はほとんど何もせず、白 `1.0` はそのチャンネルを白にする。明るい線や光だけを重ねたいときに使える。
 
+<a id="mode-subtract"></a>
+
 ## Subtract（減算）
 
 ```text
@@ -369,6 +451,8 @@ C_mode = max(0, C_base - C_top)
 
 上の色を下の色から引くモードである。Linear Burnと似て見えるが、Subtractは単純に `C_base - C_top` を計算する。
 
+<a id="mode-divide"></a>
+
 ## Divide（除算）
 
 ```text
@@ -376,6 +460,8 @@ C_mode = C_base / C_top
 ```
 
 結果を `0.0`〜`1.0` に収める場合は、上限を切り詰める。`C_top` が `0` に近いと結果が急激に大きくなるため、実際のソフトでは特別な扱いが入る。
+
+<a id="mode-darker-color"></a>
 
 ## Darker Color（カラー比較（暗））
 
@@ -388,6 +474,8 @@ sum(C_base) < sum(C_top) なら C_mode = C_base
 
 そのため、Darkenのようにチャンネルごとに別々の色を組み合わせることはない。
 
+<a id="mode-lighter-color"></a>
+
 ## Lighter Color（カラー比較（明））
 
 Darker Colorの反対で、色全体の明るさが大きいほうを選ぶ。
@@ -398,6 +486,8 @@ sum(C_base) > sum(C_top) なら C_mode = C_base
 ```
 
 DarkenとLightenの違いと同じように、チャンネル単位の比較ではなく、色全体の比較である。
+
+<a id="mode-vivid-light"></a>
 
 ## Vivid Light（ビビッドライト）
 
@@ -410,6 +500,8 @@ C_top >= 0.5 なら Color Dodge(C_base, 2*(C_top-0.5))
 
 コントラストの変化が強く、扱いも難しい。強い陰影や極端な光を作るためのモードと考えるとよい。
 
+<a id="mode-linear-light"></a>
+
 ## Linear Light（リニアライト）
 
 ```text
@@ -417,6 +509,8 @@ C_mode = clamp(C_base + 2*C_top - 1, 0, 1)
 ```
 
 上の色を2倍してから下の色に加える。50%グレーを基準に、明るい部分は明るく、暗い部分は暗くする。
+
+<a id="mode-pin-light"></a>
 
 ## Pin Light（ピンライト）
 
@@ -428,6 +522,8 @@ C_mode = max(C_base, 2*C_top - 1)   (C_top >= 0.5)
 ```
 
 OverlayやSoft Lightよりも、色の置き換わりが目立ちやすい。
+
+<a id="mode-hard-mix"></a>
 
 ## Hard Mix（ハードミックス）
 
@@ -452,20 +548,6 @@ C_mode = 1  (C_base + C_top >= 1)
 
 それでも、Multiplyは「上下を掛ける」、Screenは「反転して掛けて戻す」、Overlayは「下の明暗で分岐する」という中心部分は、いろいろなソフトを理解するときの共通の足場になる。ここでは、その共通部分をつかむことを優先した。
 
-## まとめ
+## おわりに
 
-レイヤーモードは、魔法のフィルターというより、画素ごとに同じ計算を繰り返す仕組みである。
-
-- Normalは上の色をそのまま重ねる
-- Multiplyは `C_base * C_top`。暗い色や影に向く
-- Screenは `1-(1-C_base)(1-C_top)`。明るい色や光に向く
-- Addは `C_base+C_top`。光量を直接足す
-- Overlayは、下の明暗に応じてMultiplyとScreenを切り替える
-- Soft Lightは、明暗を穏やかに動かす
-- Color BurnやColor Dodgeは、暗さや明るさを強く変える
-- DifferenceやExclusionは、上下の色の差を見つける
-- Hue・Saturation・Color・Luminosityは、色の成分を入れ替える
-- DarkenとLightenは、チャンネルごとに暗い方・明るい方を選ぶ
-- 半透明の場合は、モードの結果をさらにアルファ合成する
-
-数式を全部覚える必要はない。まずは「何を足すのか」「何を掛けるのか」「どちらの色を基準に分岐するのか」を見るだけでも、レイヤーモードの挙動はかなり予想できるようになる。
+レイヤーモードは、魔法のフィルターというより、画素ごとに同じ計算を繰り返す仕組みである。数式を全部覚えなくても、「何を足すのか」「何を掛けるのか」「どちらの色を基準に分岐するのか」を見るだけで、挙動はかなり予想できるようになる。
