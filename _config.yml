@@ -1,0 +1,10 @@
+title: uota.github.io
+description: uotaの個人サイト
+lang: ja
+url: https://uota.github.io
+baseurl: ""
+permalink: pretty
+
+# GoatCounterで発行されたURLを設定するとアクセス解析が有効になります。
+# 例: https://example.goatcounter.com/count
+goatcounter: ""
