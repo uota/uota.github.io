@@ -1,165 +1,264 @@
 ---
 layout: default
-title: ペイントソフトのレイヤーモードは何を計算しているのか――GIMP/GEGLをソースから読む
+title: 乗算って何をしているの？ ペイントソフトのレイヤーモードを数式で眺める
 date: 2026-08-30
 ---
 
-「乗算にすると暗くなる」「スクリーンにすると明るくなる」。絵を描く人なら一度は使う説明だけれど、実際にはその裏で何が計算されているのだろう。
+「乗算にすると暗くなる」「スクリーンにすると明るくなる」。ペイントソフトを使っていると、こうした説明をよく見かける。
 
-この記事では、GIMP 3 のソースコードと、その画素処理ライブラリ GEGL の実装を読みながら、レイヤーモードを数式に戻していく。対象にしたソースは、2026年8月30日時点の以下のコミットである。
+でも、乗算は本当に何をしているのだろう。なぜ乗算は影に向いていて、スクリーンは光に向いているのだろう。オーバーレイは、何と何を重ねているのだろう。
 
-- [GIMP `84e6bf9`](https://github.com/GNOME/gimp/tree/84e6bf980eeca78bb88d211e97d07f7471daabb4)
-- [GEGL `88cd774`](https://github.com/GNOME/gegl/tree/88cd774f2133bf06f9d59de27a0af9ff8ed12aae)
+この記事では、普段使っているレイヤーモードを、できるだけ数式として眺めてみる。対象は、少し理系寄りの絵描き・クリエイター。実装者向けにソースコードを読み解くことが目的ではなく、「このモードは画素にこういう計算をしているのか」と分かることを目指す。
 
-バージョンによって式や既定の色空間が変わる可能性があるので、ここでは「GIMPならいつでもこの式」と断定せず、どのコードを読めば確認できるかも併記する。
+ペイントソフトによって、同じ名前のモードでも色空間やアルファの扱いが違うことがある。そこで、ここではソースが公開されていて処理を確認しやすいGIMPを具体例にした。GIMPがすべてのソフトの代表という意味ではない。
 
-## 先に結論：レイヤーモードは二段階の処理
+## レイヤーモードは「上下の色から新しい色を作る関数」
 
-GIMPのレイヤーモードは、ざっくり言えば次の二つに分かれている。
+まず、完全に不透明な2枚のレイヤーを考える。
 
-1. 下の色と上の色から、モード固有の色 `B` を作る（blend）
-2. `B` を、アルファ・レイヤー不透明度・マスクを使って最終画素にする（composite）
+```text
+下の色 = D
+上の色 = S
+結果   = f(D, S)
+```
 
-この二段階を分けて考えると、「乗算の式は `D*S` なのに、透明部分では単純な `D*S` にならない」という一見ややこしい挙動も見通しやすい。
+`f` の中身を入れ替えたものが、乗算・スクリーン・差の絶対値などのレイヤーモードである。
 
-### 記号
+RGBの各チャンネルを `0.0`〜`1.0` に正規化して考える。たとえば、赤チャンネルについて `D = 0.3`、`S = 0.4` なら、乗算は次のようになる。
 
-以下では、RGBの各チャンネルを `0.0`〜`1.0` に正規化して書く。式は、特に断らない限りR・G・Bそれぞれに適用する。
+```text
+0.3 * 0.4 = 0.12
+```
 
-| 記号 | 意味 | GIMPのコード上の名前 |
-| --- | --- | --- |
-| `D` | 下のレイヤー（backdrop / destination）の色 | `in[c]` |
-| `S` | 上のレイヤー（source / layer）の色 | `layer[c]` |
-| `B` | モードが作った色 | `comp[c]` |
-| `αD` | 下のアルファ | `in[alpha]` |
-| `αS` | 上のアルファ | `layer[alpha]` |
-| `p` | レイヤーの不透明度 | `opacity` |
+3つのチャンネルに同じ計算をすれば、RGBの結果になる。
 
-マスク値を `m` とすると、合成に使う上レイヤーの有効アルファは概念的に次になる。
+### まずは数値を入れてみる
+
+下の色を `D = 0.25`、上の色を `S = 0.4` とすると、代表的なモードはこうなる。
+
+| モード | 計算 | 結果 |
+| --- | --- | ---: |
+| Addition | `0.25 + 0.4` | `0.65` |
+| Multiply | `0.25 * 0.4` | `0.10` |
+| Screen | `1 - (1-0.25)(1-0.4)` | `0.55` |
+| Overlay | `2 * 0.25 * 0.4` | `0.20` |
+
+この数字だけでも、乗算が暗くなり、スクリーンが明るくなる理由が見えてくる。
+
+ただし、実際のレイヤーには透明度がある。レイヤーモードは、単に `f(D,S)` を計算して終わりではない。
+
+## 実際には「色」と「透明度」を別々に考える
+
+レイヤーモードを理解するとき、次の2段階に分けると分かりやすい。
+
+1. 上下の色から、モード固有の色 `B` を作る
+2. `B` を、上のレイヤーの不透明度や透明部分を使って下に重ねる
+
+```text
+B     = f(D, S)
+結果  = アルファ合成(D, S, B)
+```
+
+ここで、
+
+| 記号 | 意味 |
+| --- | --- |
+| `D` | 下のレイヤーの色 |
+| `S` | 上のレイヤーの色 |
+| `B` | モードが作った色 |
+| `αD` | 下のレイヤーの不透明度 |
+| `αS` | 上のレイヤーの不透明度 |
+| `p` | レイヤー設定の不透明度 |
+
+マスク値を `m` とすると、上のレイヤーが実際に効く不透明度は、概念的には次になる。
 
 ```text
 αS' = αS * p * m
 ```
 
-### 通常の「union」合成
-
-最も基本的な合成方式では、出力アルファは次の式になる。
+通常の合成では、出力の不透明度は次の式になる。
 
 ```text
-αO = αS' + (1 - αS') * αD
+αout = αS' + (1 - αS') * αD
 ```
 
-色をアルファから分離して保持する、いわゆる straight color として書けば、最終色は次の形になる。
+下のレイヤーと上のレイヤーがどちらも完全に不透明なら、`αD = 1`、`αS' = 1` なので、最終的には `B` だけが残る。だから普段は、乗算を `D*S` と説明できる。
 
-```text
-C_out = ((1 - αS') * αD * D
-    + (1 - αD) * αS' * S
-    + αD * αS' * B) / αO
-```
+一方、上のレイヤーが50%不透明なら、乗算で作った色をそのまま表示するのではなく、乗算結果と下の色の間を補間する。レイヤーの不透明度を下げると「乗算の濃さ」が変わるのはこのためである。
 
-`αO` が0のときは色を見ても意味がないので、実装では色成分を特別扱いしてよい。
+## 代表的なレイヤーモードの数式一覧
 
-GIMPの `gimp_operation_layer_mode_composite_union()` は、この式を展開した形で実装している。つまり、レイヤーモードの式だけでなく、アルファの式も結果を決めている。[GIMPのcomposite実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-composite.c#L42-L94)
+ここからの式の `B` は、モードが作る色である。透明度を含む最終結果ではない。完全不透明な2枚を重ねる場合は、そのまま結果の色になる。
 
-下のレイヤーが完全に不透明で `αD = 1`、上のレイヤーも完全に不透明で `αS' = 1` なら、式は単純に次になる。
+### 基本・明暗・差分
 
-```text
-C_out = B
-```
-
-普段「乗算は `D*S`」と説明できるのは、この条件が成立しているときである。
-
-## GIMPのコードを読むときの順番
-
-GIMP本体では、レイヤーモードの一覧と各モードの設定が [`gimp-layer-modes.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimp-layer-modes.c) にまとまっている。
-
-たとえば現在の `Multiply` は、次のように登録されている。
-
-```c
-.blend_function = gimp_operation_layer_mode_blend_multiply,
-.composite_mode = GIMP_LAYER_COMPOSITE_CLIP_TO_BACKDROP,
-.composite_space = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR,
-.blend_space = GIMP_LAYER_COLOR_SPACE_RGB_LINEAR
-```
-
-実際の色の式は [`gimpoperationlayermode-blend.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c) にあり、アルファを含む配置は [`gimpoperationlayermode-composite.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-composite.c) にある。
-
-概念的な流れは、GIMPの [`gimpoperationlayermode.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode.c#L662-L845) を縮めるとこうなる。
-
-```c
-// 1. 色空間をそろえ、モード固有の色を作る
-blend_function(in, layer, blend_out, samples);
-
-// 2. blend_out をアルファと不透明度で最終画素にする
-composite_union(in, layer, blend_out, mask, opacity, out, samples);
-```
-
-実際のコードは、色空間の変換、インプレース処理、透明画素の高速スキップなども行う。ただし、理解の中心はこの二段階でよい。
-
-## RGBをチャンネルごとに計算するモード一覧
-
-以下の `B` は「blend段階の結果」であり、最終出力 `C_out` そのものではない。`D` と `S` が完全不透明なら、そのまま最終色になる。
-
-### 基本・明暗・反転系
-
-| モード | blend段階の式 `B = f(D, S)` | 直感 |
+| モード | 式 `B = f(D, S)` | どう見えるか |
 | --- | --- | --- |
-| Normal | `S` | 上の色を使う |
-| Addition | `D + S` | 光を足す。1を超えることがある |
-| Subtract | `D - S` | 上の色を引く。負になることがある |
+| Normal | `S` | 上の色をそのまま使う |
+| Addition | `D + S` | 光を足す。明るくなりやすい |
+| Subtract | `D - S` | 色を引く。暗くなりやすい |
 | Multiply | `D * S` | 両方が暗いほど暗くなる |
-| Screen | `1 - (1 - D) * (1 - S)` | 反転して乗算し、もう一度反転する |
+| Screen | `1 - (1-D)(1-S)` | 反転してから乗算するので明るくなる |
 | Darken only | `min(D, S)` | チャンネルごとに暗い方を選ぶ |
 | Lighten only | `max(D, S)` | チャンネルごとに明るい方を選ぶ |
-| Difference | `abs(D - S)` | 色の差の絶対値 |
-| Exclusion | `0.5 - 2 * (D - 0.5) * (S - 0.5)` | Differenceよりコントラストが弱い差分 |
+| Difference | `abs(D - S)` | 2色の差を取り出す |
+| Exclusion | `D + S - 2DS` | Differenceに似ているが弱め |
 
-GIMPのコードでも、たとえばMultiplyは次の一行にほぼ対応している。
+AdditionとMultiplyは、式だけ見るととても単純である。
+
+```text
+Addition: D + S
+Multiply: D * S
+```
+
+Additionは `1.0` を超えることがあり、Subtractは負になることがある。8bit画像では表示や保存のときに範囲外を切り詰めることが多いが、内部をfloatで扱うソフトでは、途中の計算結果がそのまま0〜1に収まるとは限らない。
+
+### スクリーンは「白を足す」のではなく「黒を減らす」
+
+Screenの式を展開すると、次のようにも書ける。
+
+```text
+1 - (1-D)(1-S)
+= D + S - D*S
+```
+
+黒 `0` を入れると、
+
+```text
+1 - (1-D)(1-0) = D
+```
+
+なので黒はほとんど何もしない。白 `1` を入れると、結果は `1` になる。白い光やハイライトを重ねる用途に向いているのは、この性質による。
+
+### OverlayとHard light
+
+Overlayは、下の色が暗いか明るいかで、Multiply寄りかScreen寄りかを切り替える。
+
+```text
+Overlay:
+  D < 0.5 なら 2 * D * S
+  それ以外は 1 - 2 * (1-D) * (1-S)
+```
+
+Hard lightは、同じ切り替えを上の色で行う。
+
+```text
+Hard light:
+  S <= 0.5 なら 2 * D * S
+  それ以外は 1 - 2 * (1-D) * (1-S)
+```
+
+同じ `D = 0.75`、`S = 0.4` でも、Overlayは上側の式、Hard lightは下側の式を使う。
+
+```text
+Overlay   = 1 - 2 * (1-0.75) * (1-0.4) = 0.70
+Hard light = 2 * 0.75 * 0.4             = 0.60
+```
+
+| モード | 式 | ポイント |
+| --- | --- | --- |
+| Overlay | `D < 0.5 ? 2DS : 1-2(1-D)(1-S)` | 下の色で分岐 |
+| Hard light | `S <= 0.5 ? 2DS : 1-2(1-D)(1-S)` | 上の色で分岐 |
+| Soft light | `(1-D)(D*S) + D*(1-(1-D)(1-S))` | MultiplyとScreenを補間する形 |
+| Linear burn | `D + S - 1` | 暗い方向へ直線的に足す |
+| Linear light | `D + 2S - 1` | 上の色を2倍して足す |
+| Pin light | `S > 0.5 ? max(D,2S-1) : min(D,2S)` | min/maxを切り替える |
+| Vivid light | `S <= 0.5 ? 1-(1-D)/(2S) : D/(2(1-S))` | Burn/Dodge系の強いコントラスト |
+| Hard mix | `D + S < 1 ? 0 : 1` | ほぼ二値化する |
+
+Soft lightは、名前からHard lightの単純な弱版に見える。しかし、GIMPの現在の実装では、MultiplyとScreenを作ってから、下の色を重みとして補間している。
+
+### 除算を使うモード
+
+| モード | 式 | 注意点 |
+| --- | --- | --- |
+| Dodge | `D / (1-S)` | `S` が1に近いと急激に明るくなる |
+| Burn | `1 - (1-D) / S` | `S` が0に近いと急激に暗くなる |
+| Divide | `D / S` | `S` が0に近いと値が大きくなる |
+
+除算系が扱いにくいのは、分母が0に近づくと結果が急に大きくなるからである。実際のソフトでは、無限大にならないように特殊な処理や範囲制限が入る。
+
+### 粒子・差分を扱うモード
+
+| モード | 式 | 用途のイメージ |
+| --- | --- | --- |
+| Grain extract | `D - S + 0.5` | 差分を灰色中心に取り出す |
+| Grain merge | `D + S - 0.5` | 差分のような色を戻す |
+
+`0.5` を中心に置くのがポイントである。値が0.5より明るいか暗いかで、粒子や凹凸のような情報として見える。
+
+## HSV・HSL・LChはRGBを直接混ぜない
+
+HSVやHSL、LChのモードは、R・G・Bをチャンネルごとに掛けるのではない。色を別の成分に分け、その一部を上のレイヤーから借りる。
+
+| モード | 上のレイヤーから借りるもの | 下のレイヤーから残すもの |
+| --- | --- | --- |
+| HSV Hue | 色相 | 彩度・明度 |
+| HSV Saturation | 彩度 | 色相・明度 |
+| HSL Color | 色相・彩度 | 明度 |
+| HSV Value | 明度 | 色相・彩度 |
+| LCh Hue | 色相 | 明度・彩度に相当するChroma |
+| LCh Chroma | Chroma | 明度・色相 |
+| LCh Color | 色相・Chroma | 明度 |
+| LCh Lightness | 明度 | 色相・Chroma |
+
+たとえばHSV Hueは「上のレイヤーの色相」と「下のレイヤーの彩度・明度」を組み合わせる。上が無彩色だと色相を取り出せないので、下の色相を残す。
+
+LChは、Lightness・Chroma・Hueの略で、CIELABから数学的に作られた色空間である。GIMPのコードでは、Labの `L`, `a`, `b` を使い、`a,b` 平面を極座標として扱っている。
+
+```text
+Chroma = sqrt(a*a + b*b)
+Hue    = atan2(b, a)
+```
+
+「色味だけ変える」モードでも、実際にはこのように色の表現を変換してから一部の成分を交換している。[GIMP公式マニュアルのHSV説明](https://docs.gimp.org/3.0/en/layer-mode-group-hsv.html) [LCh説明](https://docs.gimp.org/3.0/en/layer-mode-group-lch.html)
+
+## 同じ式でも、色空間が違えば見え方が変わる
+
+ここは、モードを数式だけで理解すると見落としやすい。
+
+たとえばOverlayの境界は `0.5` である。しかし、その `0.5` がlinear RGBの値なのか、知覚的なRGBの値なのかで、実際の明るさは違う。
+
+GIMP 3の現在の設定を例にすると、モードごとにblendする色空間が異なる。
+
+| モードの例 | GIMPでのblend空間の例 |
+| --- | --- |
+| Multiply, Addition | RGB linear |
+| Screen, Overlay, Difference | RGB perceptual |
+| HSV Hue/Saturation/Value, HSL Color | RGB non-linear |
+| LCh Hue/Chroma/Color/Lightness | Lab |
+
+だから、同じ `D`、`S`、同じ式でも、どの色空間の数値に対して計算するかで結果の見た目が変わる。ソフトをまたいだ比較で「同じOverlayなのに少し違う」と感じる理由の一つである。
+
+## アルファがあると、モードの性格がもっと見えてくる
+
+上のレイヤーが半透明の場合、モードが作った色 `B` と下の色 `D` を、その不透明度に応じて混ぜる。
+
+下のレイヤーが完全に不透明なら、考え方は次のように簡略化できる。
+
+```text
+最終色 = αS' * B + (1 - αS') * D
+```
+
+たとえば半透明の黒をMultiplyで重ねると、黒一色になるのではなく、下の色を暗くする方向へ少しだけ動く。半透明の白をScreenで重ねると、白一色になるのではなく、下の色を明るくする方向へ少しだけ動く。
+
+一方、透明な部分の外側まで結果を表示するかどうかは、ソフトの合成方式にも関係する。GIMPでは、色の計算と別に、下のレイヤーの範囲に結果を制限する方式などがある。
+
+## GIMPは、ここでいう処理の具体例
+
+ここまでの一般的な説明を、GIMPのソースコードで確かめてみる。
+
+GIMPでは、現在のレイヤーモードの情報が [`gimp-layer-modes.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimp-layer-modes.c) に登録され、色の計算が [`gimpoperationlayermode-blend.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c) に書かれている。
+
+Multiplyは、ほとんどそのまま次の一行である。
 
 ```c
 comp[c] = in[c] * layer[c];
 ```
 
-ただしコードは毎画素について、入力とレイヤーのアルファが0でない場合だけRGBを計算し、その後で `comp[alpha] = layer[alpha]` としている。[Multiplyの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1012-L1039)
+[GIMPのMultiply実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1012-L1039)
 
-Screenは次の一行である。
-
-```c
-comp[c] = 1.0f - (1.0f - in[c]) * (1.0f - layer[c]);
-```
-
-[Screenの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1118-L1145)
-
-AdditionやSubtractは、現在のGIMPのfloat処理では、blend関数自体が必ず `0.0`〜`1.0` に丸めるわけではない。HDRや内部の色形式まで含めて考える場合は、「1を超えたら即座に255へクリップ」と単純化しないほうがよい。
-
-### コントラスト系
-
-OverlayとHard lightは似ているが、分岐に使う側が違う。
-
-```text
-Overlay:
-  D < 0.5 なら 2 * D * S
-  それ以外は 1 - 2 * (1 - D) * (1 - S)
-
-Hard light:
-  S <= 0.5 なら 2 * D * S
-  それ以外は 1 - 2 * (1 - D) * (1 - S)
-```
-
-Overlayは下の色の明るさで「暗部側の乗算」か「明部側のスクリーン」かを選ぶ。Hard lightは上の色で選ぶ。GIMPのコードでは、Overlayが `in[c] < 0.5f`、Hard lightが `layer[c] > 0.5f` を見ている。
-
-| モード | blend段階の式 | 備考 |
-| --- | --- | --- |
-| Overlay | `D < 0.5 ? 2DS : 1 - 2(1-D)(1-S)` | 下の色で分岐 |
-| Hard light | `S <= 0.5 ? 2DS : 1 - 2(1-D)(1-S)` | 上の色で分岐 |
-| Soft light | `(1-D)(D*S) + D*(1-(1-D)(1-S))` | 現在のGIMP実装の式 |
-| Linear burn | `D + S - 1` | Linear lightの暗い側 |
-| Linear light | `D + 2S - 1` | 上の色を2倍して加算 |
-| Pin light | `S > 0.5 ? max(D, 2S-1) : min(D, 2S)` | 明暗側でmin/maxを切り替える |
-| Vivid light | `S <= 0.5 ? 1-(1-D)/(2S) : D/(2(1-S))` | Burn/Dodge系。範囲外を制限 |
-| Hard mix | `D + S < 1 ? 0 : 1` | ほぼ二値化 |
-
-OverlayのGIMP実装は次のようになっている。
+Overlayも、数式と同じ分岐になっている。
 
 ```c
 if (in[c] < 0.5f)
@@ -168,213 +267,64 @@ else
   val = 1.0f - 2.0f * (1.0f - layer[c]) * (1.0f - in[c]);
 ```
 
-[Overlayの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1041-L1076)
+[GIMPのOverlay実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1041-L1076)
 
-Soft lightは名前からHard lightの単純な弱版に見えるが、現在のGIMPの関数は、まずMultiplyとScreenを計算し、それらを下の色で補間している。
+ただし、GIMPの処理はこの式で終わらない。色を作った後、アルファ・不透明度・マスクを使って最終画素にする。[GIMPの合成処理](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode.c#L662-L845)
 
-```c
-gfloat multiply = in[c] * layer[c];
-gfloat screen   = 1.0f - (1.0f - in[c]) * (1.0f - layer[c]);
-gfloat val      = (1.0f - in[c]) * multiply + in[c] * screen;
-```
+GIMP 3の実装を具体例にしたのは、こうした「感覚的な説明」と「実際の計算」を同じソースで照合できるからである。他のペイントソフトの挙動を調べるときも、まずは同じ名前の式、色空間、アルファ処理の3つを確認するとよい。
 
-[Soft lightの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L1147-L1179)
+## DissolveやEraseは、色の計算だけでは説明できない
 
-### 除算・焼き込み・粒子系
+すべてのモードが、RGBの数式だけで表せるわけではない。
 
-| モード | blend段階の式 | 数値上の注意 |
-| --- | --- | --- |
-| Dodge | `D / (1-S)` | `S` が1に近いと急激に明るくなる |
-| Burn | `1 - (1-D) / S` | `S` が0に近いと急激に変化する |
-| Divide | `D / S` | 上の色が0に近いと大きくなる |
-| Grain extract | `D - S + 0.5` | 0.5を中心に差を取り出す |
-| Grain merge | `D + S - 0.5` | Grain extractの逆向き |
-
-GIMPは単純な `/` を直接使わず、`safe_div()` という補助関数を使う。現在のコードでは、分子が `1e-6` 以下なら0にし、結果をおおむね `±1e6` の範囲に制限している。これは「数学上の分母に小さなεを足す」という実装とは違うので、他ソフトと完全一致するとは限らない。[safe_divとDodge/Burn/Divide](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L38-L69)
-
-### 色差・明るさを使うモード
-
-| モード | 処理 |
+| モード | 何をしているか |
 | --- | --- |
-| Luma darken only | 下と上の輝度を比較し、輝度の低い方のRGB全体を選ぶ |
-| Luma lighten only | 下と上の輝度を比較し、輝度の高い方のRGB全体を選ぶ |
-| Luminance | 上の輝度を、下の色相・色味に乗せる |
+| Dissolve | 乱数で画素を上か下に振り分け、半透明部分を粒状にする |
+| Color Erase | 上下の色の差から、下の色をどれだけ透明にするか決める |
+| Erase | 上の有効アルファで、下のアルファを減らす |
+| Merge | 上下の不透明度を、重複分に配慮して合成する |
+| Split | 上下の不透明度の差を取り、重なった部分を透明にする |
+| Pass through | グループ内部を、下のレイヤーと一緒に合成する指示 |
 
-Luma darken/lightenの重みは固定値としてコードに書かれているのではなく、`babl_space_get_rgb_luminance()` から現在のRGB色空間の係数を取得している。したがって、色空間が変われば「明るさ」の比較も変わる。[Luma darken/lightenの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L868-L961)
-
-Luminanceは、下の色の輝度を `Y_D`、上の色の輝度を `Y_S` とすると、概念的には次の処理である。
-
-```text
-Y_D = wR * D_R + wG * D_G + wB * D_B
-Y_S = wR * S_R + wG * S_G + wB * S_B
-B   = D * safe_div(Y_S, Y_D)
-```
-
-そのため、上のレイヤーから明るさを借りながら、下のレイヤーの色味を大きく変えずに済む。[Luminanceの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L963-L1010)
-
-## HSV・HSL・LChは「RGBを混ぜる式」ではない
-
-HSVやHSL、LChのモードは、R・G・Bをチャンネルごとに掛けるのではなく、いったん別の表現に読み替えて、一部の成分だけを上のレイヤーから借りる。
-
-| モード | 上のレイヤーから使う成分 | 下のレイヤーから使う成分 |
-| --- | --- | --- |
-| HSV Hue | Hue | Saturation, Value |
-| HSV Saturation | Saturation | Hue, Value |
-| HSL Color | Hue, Saturation | Lightness |
-| HSV Value | Value | Hue, Saturation |
-| LCh Hue | Hue | Lightness, Chroma |
-| LCh Chroma | Chroma | Lightness, Hue |
-| LCh Color | Hue, Chroma | Lightness |
-| LCh Lightness | Lightness | Hue, Chroma |
-
-たとえばHSV Hueは、上のレイヤーに色相があればその色相を使い、下のレイヤーの彩度と明度を保つ。上が無彩色なら色相を取り出せないので、下の色相を残す。[GIMP公式マニュアルのHSV説明](https://docs.gimp.org/3.0/en/layer-mode-group-hsv.html)
-
-GIMPの実装は、必ずしも `RGB -> HSV -> RGB` という関数をそのまま呼ぶ形ではない。最大値・最小値・差分を使った比率計算で同じ成分交換を行い、ゼロ除算を避ける分岐も入れている。[HSVの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L480-L633)
-
-LCh系は、GIMPのコード上ではLabの `L`, `a`, `b` 成分を使っている。`a` と `b` を極座標として見ると、次のように読める。
-
-```text
-Chroma = sqrt(a*a + b*b)
-Hue    = atan2(b, a)
-```
-
-たとえばLCh Chromaでは、下の `a,b` の向きを保ったまま、上の `a,b` の長さを使う。コードにも `hypotf()` と比率計算が現れる。[LChの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode-blend.c#L635-L767)
-
-## 色空間が違えば、同じ式でも結果が違う
-
-ここが、数式一覧だけでは見落としやすいポイントである。
-
-GIMPはモードごとに、どの色空間でblendするかを登録している。現在の設定例は次の通り。
-
-| モードの例 | blendする色空間 |
-| --- | --- |
-| Multiply, Addition | RGB linear |
-| Screen, Overlay, Difference | RGB perceptual |
-| HSV Hue/Saturation/Value, HSL Color | RGB non-linear |
-| LCh Hue/Chroma/Color/Lightness | Lab |
-
-つまり `0.5` は、常に同じ物理的な明るさを意味するわけではない。Overlayの境界 `0.5` をlinear RGBで判定するのか、知覚的なRGBで判定するのかで、暗部・明部の境界自体が変わる。
-
-この設定は、モードを登録している [`gimp-layer-modes.c`](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimp-layer-modes.c#L438-L573) で確認できる。また実行時には、GIMPが `babl_process()` を使ってblend空間とcomposite空間の間を変換してから、モード関数を呼んでいる。[色空間変換とblend呼び出し](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationlayermode.c#L677-L791)
-
-## 「GIMPのMultiply」と「GEGLのmultiply」は同じか
-
-名前が似ていても、ソース上では別の層にある。
-
-GIMPのレイヤーモードは、上で見たように、色を作る関数とアルファ合成を組み合わせる。一方、GEGLには単体の `gegl:multiply` というpoint composerもあり、対応するソースは次のような数学演算として生成されている。
-
-```c
-result = input * value;
-```
-
-[GEGLのmultiply](https://github.com/GNOME/gegl/blob/88cd774f2133bf06f9d59de27a0af9ff8ed12aae/operations/generated/multiply.c#L94-L116)
-
-さらにGEGLのSVG系ブレンドには、アルファを式の中に含める `svg:overlay` もある。そこでは、完全不透明時の `D < 0.5` に相当する判定が、premultiplied colorを前提に `2 * cB > aB` と書かれている。
-
-```c
-aD = aA + aB - aA * aB;
-
-if (2 * cB > aB)
-  out[j] = 2 * cA * cB + cA * (1 - aB) + cB * (1 - aA);
-else
-  out[j] = aA * aB - 2 * (aB - cB) * (aA - cA)
-         + cA * (1 - aB) + cB * (1 - aA);
-```
-
-[GEGLのOverlay実装](https://github.com/GNOME/gegl/blob/88cd774f2133bf06f9d59de27a0af9ff8ed12aae/operations/generated/overlay.c#L132-L164)
-
-GEGLのこのファイルは手書きの唯一の実装ではなく、[`svg-12-blend.rb`](https://github.com/GNOME/gegl/blob/88cd774f2133bf06f9d59de27a0af9ff8ed12aae/operations/generated/svg-12-blend.rb) から生成されたファイルである。ソースを読むときは、
-
-- GIMPのレイヤーモードか
-- GEGLの単体演算か
-- straight colorかpremultiplied colorか
-- blend処理かcomposite処理か
-
-を最初に確認しないと、同じ「Overlay」という名前でも式が一致しない。
-
-## composite mode：色だけでなく、どこまで残すかも選ぶ
-
-GIMPには、blend modeとは別にcomposite modeがある。代表的には次のような違いである。
-
-| composite mode | 意味 |
-| --- | --- |
-| Union | 上と下の領域を合成する。通常のアルファoverに近い |
-| Clip to backdrop | 下のレイヤーの不透明領域に結果を制限する |
-| Clip to layer | 上のレイヤーの不透明領域に結果を制限する |
-| Intersection | 両方が重なる領域だけを残す |
-
-たとえば `Clip to backdrop` では、GIMPのコードは概念的に次を行う。
-
-```text
-αO = αD
-C_out = B * αS' + D * (1 - αS')
-```
-
-`Multiply` や `Screen` など、現在のGIMPで多くの色モードに設定されているのがこの方式である。上のレイヤーが下のレイヤーの外側まで広がっていても、外側のアルファを新しく生やさない。
-
-この仕組みがあるため、「blend式が同じなのに、レイヤーの端の透明部分で見え方が違う」という現象が起こる。色の式を調べるときは、`composite_mode` も一緒に見る必要がある。
-
-## 色を混ぜない特殊モード
-
-すべてのレイヤーモードが、RGBの `D` と `S` から新しい色を作るわけではない。
-
-| モード | 主な処理 |
-| --- | --- |
-| Dissolve | 乱数で各画素を上か下のどちらかに振り分ける。半透明部分を粒状にする |
-| Color Erase | 上の色と下の色の差から、下の色をどれだけ透明にするかを計算する |
-| Erase | 上の有効アルファで下のアルファを減らす。通常は `αO = (1 - αS') * αD` |
-| Merge | 上下のアルファが重複して数えられないようにして加える。unionでは `αO = min(αD, 1-αS') + αS'` |
-| Split | 上下のアルファの差を取り、重なっている部分を透明にする |
-| Pass through | 色の式ではなく、グループ内部を下のレイヤーと一緒に合成する指示 |
-
-Dissolveは連続的な数式で色を補間するモードではない。現在の実装では、乱数値と `layer_alpha * opacity * 255` を比較し、当選した画素は上の色、外れた画素は下の色を出力する。[Dissolveの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationdissolve.c#L105-L174)
-
-EraseとSplitは、色よりもアルファを処理するモードである。[Eraseの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationerase.c#L85-L160) [Splitの実装](https://github.com/GNOME/gimp/blob/84e6bf980eeca78bb88d211e97d07f7471daabb4/app/operations/layer-modes/gimpoperationsplit.c#L85-L156)
+Dissolveが「50%の色を作る」のではなく、画素ごとに上か下を選んでいるのは面白いところである。見た目は半透明でも、拡大すると粒の集まりとして現れる。
 
 ## Legacy modeには注意する
 
-GIMP 2.10以降、レイヤーモードは変更され、古いファイルとの互換性のためにlegacy modeも残されている。公式マニュアルにも、legacy modeは古いGIMPで作られた画像の読み込みや、他形式との互換性のために使われると説明されている。[GIMP公式マニュアル：Legacy Layer Modes](https://docs.gimp.org/3.0/en/gimp-concepts-layer-modes-legacy.html)
+GIMP 2.10以降、レイヤーモードは変更され、古いファイルとの互換性のためにLegacy modeも残されている。公式マニュアルでも、古いGIMPで作られた画像や他形式との互換性のために使われるものとして説明されている。[GIMP公式マニュアル：Legacy Layer Modes](https://docs.gimp.org/3.0/en/gimp-concepts-layer-modes-legacy.html)
 
-したがって、次の二つは同じとは限らない。
+そのため、次の二つは同じとは限らない。
 
 ```text
 Overlay
 Overlay (legacy)
 ```
 
-特にlegacyのOverlayは、歴史的なバグのため実質的にSoft lightと同じ式になっていると公式マニュアルに記載されている。古いXCFを再現したいのでなければ、現行のDefault側のモードを使うほうが、意図を説明しやすい。
+LegacyのOverlayは、歴史的なバグのため実質的にSoft lightと同じ式になっていると公式マニュアルに記載されている。これはGIMP固有の歴史であり、他のソフトにそのまま当てはめることはできない。
 
-## ソースから自分で一覧を作る
+## 絵を描くとき、数式をどう使うか
 
-GIMPとGEGLのリポジトリを取得して、まず関数名を一覧するなら次のようにできる。
+モード名を丸暗記する代わりに、「上のレイヤーから何を借りたいか」で考えると選びやすい。
 
-```bash
-git clone --depth 1 https://github.com/GNOME/gimp.git
-git clone --depth 1 https://github.com/GNOME/gegl.git
+- 影を下の色に沿わせたい → Multiply。上の色が黒に近いほど強く効く
+- 光を足したい → Screen。黒はほぼ何もしない
+- 上下の差を見たい → Difference。位置合わせや色の比較にも使える
+- 下の明暗に応じてコントラストを付けたい → Overlay
+- 色相だけ、明度だけを変えたい → HSV/HSL/LCh系
+- 強い光や焼き込みを作りたい → Dodge/Burn。ただし0付近・1付近で変化が急になる
+- 粒状感や凹凸感を取り出したい → Grain系
 
-rg -n "^gimp_operation_layer_mode_blend_" \
-  gimp/app/operations/layer-modes/gimpoperationlayermode-blend.c
-
-rg -n "GEGL_OP_NAME|description.*blend" \
-  gegl/operations/generated gegl/operations/workshop
-```
-
-GIMP側だけを調べるなら、次の三つを押さえればよい。
-
-1. `gimp-layer-modes.c`：モード名、blend関数、色空間、composite modeの対応
-2. `gimpoperationlayermode-blend.c`：モード固有の色の式
-3. `gimpoperationlayermode-composite.c`：アルファ、不透明度、マスクの合成式
+重要なのは、モードの名前が「結果」を直接表しているのではなく、上下の値に対する関数の性格を表していることだ。だから、同じMultiplyでも、上に置く色が白なのか黒なのか、半透明なのか、どの色空間で計算するのかで、見え方は変わる。
 
 ## まとめ
 
-レイヤーモードを数式にすると、名前の印象よりずっと機械的である。
+レイヤーモードは、魔法のフィルターというより、画素ごとに同じ計算を繰り返す仕組みである。
 
-- Multiplyは、基本的には `D*S`
-- Screenは、反転してから乗算する `1-(1-D)(1-S)`
+- Multiplyは `D*S`
+- Screenは `1-(1-D)(1-S)`
 - Overlayは、下の色を境にMultiplyとScreenを切り替える
-- DodgeやBurnは除算なので、0付近の扱いが重要
-- HSV・HSL・LChは、RGBを直接混ぜずに成分を交換する
-- しかし、これらの式は最終画素そのものではなく、blend段階の結果である
-- アルファ、不透明度、マスク、composite mode、色空間が最終結果を決める
+- Dodge・Burn・Divideは除算なので、端の値で急に変化する
+- HSV・HSL・LChは、RGBを直接混ぜず、色の成分を入れ替える
+- 透明度があると、モードの色 `B` をさらにアルファ合成する
+- ソフトによって、色空間・アルファ処理・Legacy対応が異なる
 
-絵描きにとっての「モードの使い分け」は経験則に見えるけれど、ソースまで降りていくと、暗くなる・明るくなる・色味だけ変わるという感覚が、かなり素直な数式として現れてくる。
+「このモードは何となくこういう効果」という経験に、ひとつ数式を添えるだけで、レイヤーの挙動を予測しやすくなる。数式を全部覚える必要はない。まずは、乗算は暗い値を強める、スクリーンは明るい値を強める、オーバーレイは下の明暗で分岐する、というところから始めればよい。
