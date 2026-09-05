@@ -1,4 +1,9 @@
 _site/
 .jekyll-cache/
 .sass-cache/
-Gemfile.lock
+.bundle/
+vendor/
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
