@@ -1,4 +1,15 @@
 {% assign result_path = '/assets/images/layer-blend-results/' | append: include.mode | append: '.webp' %}
-<figure class="blend-result">
-  <img src="{{ result_path | relative_url }}" alt="{{ include.label }}で合成した結果" loading="lazy" decoding="async">
-</figure>
+<div class="blend-comparison">
+  <figure>
+    <img src="{{ '/assets/images/layer-blend-base-fruit.webp' | relative_url }}" alt="下地となる果物の写真" loading="lazy" decoding="async">
+    <figcaption>下地</figcaption>
+  </figure>
+  <figure>
+    <img src="{{ '/assets/images/layer-blend-top-pattern.webp' | relative_url }}" alt="上に重ねる、上半分が虹色で下半分がグレースケールのパターン" loading="lazy" decoding="async">
+    <figcaption>上のレイヤー</figcaption>
+  </figure>
+  <figure>
+    <img src="{{ result_path | relative_url }}" alt="{{ include.label }}で合成した結果" loading="lazy" decoding="async">
+    <figcaption>{{ include.label }}の結果</figcaption>
+  </figure>
+</div>

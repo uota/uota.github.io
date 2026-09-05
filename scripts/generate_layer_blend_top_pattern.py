@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT,
         help=f"path for the WebP image (default: {DEFAULT_OUTPUT})",
     )
-    parser.add_argument("--size", type=int, default=1024, help="square image size in pixels")
+    parser.add_argument("--size", type=int, default=512, help="square image size in pixels")
     return parser.parse_args()
 
 

@@ -66,42 +66,31 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-.blend-inputs {
+.blend-comparison {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   margin: 1.5rem 0;
 }
 
-.blend-inputs figure,
-.blend-result {
+.blend-comparison figure {
   margin: 0;
 }
 
-.blend-inputs img,
-.blend-result img {
+.blend-comparison img {
   display: block;
   height: auto;
   max-width: 100%;
 }
 
-.blend-inputs figcaption {
+.blend-comparison figcaption {
   color: #666;
   margin-top: 0.4rem;
   text-align: center;
 }
 
-.blend-result {
-  margin: 1.5rem 0;
-}
-
-.blend-result img {
-  margin: 0 auto;
-  width: min(100%, 32rem);
-}
-
 @media (max-width: 32rem) {
-  .blend-inputs {
+  .blend-comparison {
     grid-template-columns: 1fr;
   }
 }

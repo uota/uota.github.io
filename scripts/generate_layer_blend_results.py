@@ -1,4 +1,4 @@
-"""Generate 1024px WebP examples for every blend mode in the article.
+"""Generate 512px WebP examples for every blend mode in the article.
 
 The script uses the fruit photograph as C_base and the rainbow/grayscale image
 as C_top.  Both inputs are opaque, so the generated files show C_mode directly.
@@ -240,7 +240,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base", type=Path, default=DEFAULT_BASE, help="Base image (WebP)")
     parser.add_argument("--top", type=Path, default=DEFAULT_TOP, help="Top image (WebP)")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="result directory")
-    parser.add_argument("--size", type=int, default=1024, help="square output size in pixels")
+    parser.add_argument("--size", type=int, default=512, help="square output size in pixels")
     parser.add_argument("--quality", type=int, default=90, help="WebP quality from 0 to 100")
     return parser.parse_args()
 

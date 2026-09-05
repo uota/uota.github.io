@@ -147,20 +147,9 @@ C_out = a_top' * C_mode + (1 - a_top') * C_base
 
 一方、上のレイヤーが50%不透明なら、乗算で作った色をそのまま表示するのではなく、乗算結果と下の色の間を補間する。レイヤーの不透明度を下げると「乗算の濃さ」が変わるのはこのためである。
 
-## 今回の入力画像
+## 今回の画像
 
-以下の合成結果は、同じ2枚をどちらも100%不透明として重ねたものである。したがって、この例では最終出力 `C_out` は各モードが作る色 `C_mode` と同じになる。上半分が虹色、下半分がグレースケールのTopを使うことで、色相と明暗がどう変化するかを一枚で見比べられる。
-
-<div class="blend-inputs">
-  <figure>
-    <img src="{{ '/assets/images/layer-blend-base-fruit.webp' | relative_url }}" alt="下地となる果物の写真" decoding="async">
-    <figcaption>Base（下地）</figcaption>
-  </figure>
-  <figure>
-    <img src="{{ '/assets/images/layer-blend-top-pattern.webp' | relative_url }}" alt="上に重ねる、上半分が虹色で下半分がグレースケールのパターン" decoding="async">
-    <figcaption>Top（重ねる色）</figcaption>
-  </figure>
-</div>
+以下の例は、果物の写真を下地に、上半分が虹色・下半分がグレースケールのパターンを上のレイヤーとして重ねたものである。どちらも100%不透明なので、この例では最終出力 `C_out` は各モードが作る色 `C_mode` と同じになる。以降は各モードについて、下地・上のレイヤー・合成結果の順に並べて見る。
 
 <a id="mode-normal"></a>
 
