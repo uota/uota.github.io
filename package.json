@@ -2,7 +2,7 @@
   "name": "uota-worker-preview",
   "private": true,
   "scripts": {
-    "build": "bundle install && bundle exec jekyll build",
+    "build": "bundle exec jekyll build",
     "dev": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "deploy:preview": "npm run build && wrangler versions upload"

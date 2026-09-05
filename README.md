@@ -8,11 +8,12 @@ Node.jsとRuby/Bundlerを用意してから、次を実行します。
 
 ```powershell
 npm install
+bundle install
 npm run build
 npm run dev
 ```
 
-`npm run build` はJekyllで `_site/` を生成します。`npm run dev` はその成果物をWorkersのローカル開発サーバーで配信します。
+`bundle install` はRubyの依存関係を準備します。`npm run build` はJekyllで `_site/` を生成します。`npm run dev` はその成果物をWorkersのローカル開発サーバーで配信します。
 
 Cloudflareへ手動で反映する場合は、ログイン済みの環境で次を実行します。
 
