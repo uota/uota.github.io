@@ -15,7 +15,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "assets" / "images" / "layer-blend-top-pattern.png"
+DEFAULT_OUTPUT = ROOT / "assets" / "images" / "layer-blend-top-pattern.webp"
 
 
 def build_pattern(size: int) -> Image.Image:
@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help=f"path for the PNG (default: {DEFAULT_OUTPUT})",
+        help=f"path for the WebP image (default: {DEFAULT_OUTPUT})",
     )
     parser.add_argument("--size", type=int, default=1024, help="square image size in pixels")
     return parser.parse_args()
@@ -61,16 +61,10 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     pattern = build_pattern(args.size)
-    pattern.save(output, format="PNG", optimize=True)
+    pattern.convert("RGB").save(output, format="WEBP", lossless=True, method=6)
 
-    # Keep a predictable preview path for review workflows.  This pattern is
-    # fully opaque, so the preview is intentionally identical to the source.
-    preview_path = output.with_name(f"{output.stem}-preview{output.suffix}")
-    pattern.save(preview_path, format="PNG", optimize=True)
-
-    print(f"PNG:     {output}")
-    print(f"Preview: {preview_path}")
-    print(f"Size:    {args.size}x{args.size}")
+    print(f"WebP: {output}")
+    print(f"Size: {args.size}x{args.size}")
 
 
 if __name__ == "__main__":

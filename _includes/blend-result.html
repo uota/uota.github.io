@@ -1,0 +1,4 @@
+{% assign result_path = '/assets/images/layer-blend-results/' | append: include.mode | append: '.webp' %}
+<figure class="blend-result">
+  <img src="{{ result_path | relative_url }}" alt="{{ include.label }}で合成した結果" loading="lazy" decoding="async">
+</figure>

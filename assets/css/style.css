@@ -65,3 +65,43 @@ h3 {
   color: #666;
   font-variant-numeric: tabular-nums;
 }
+
+.blend-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.blend-inputs figure,
+.blend-result {
+  margin: 0;
+}
+
+.blend-inputs img,
+.blend-result img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+
+.blend-inputs figcaption {
+  color: #666;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+.blend-result {
+  margin: 1.5rem 0;
+}
+
+.blend-result img {
+  margin: 0 auto;
+  width: min(100%, 32rem);
+}
+
+@media (max-width: 32rem) {
+  .blend-inputs {
+    grid-template-columns: 1fr;
+  }
+}
