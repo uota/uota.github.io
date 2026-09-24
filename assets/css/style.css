@@ -66,6 +66,10 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.post-share {
+  margin-top: 2rem;
+}
+
 .blend-comparison {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

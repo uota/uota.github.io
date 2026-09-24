@@ -1,24 +1,18 @@
 ---
 layout: default
-title: 乗算って何をしているの？ ペイントソフトのレイヤーモードを数式で眺める
-date: 2026-08-30
+title: ペイントソフトのレイヤーモードを数式で眺める
+date: 2026-09-24
 ---
 
-「乗算にすると暗くなる」「スクリーンにすると明るくなる」。ペイントソフトを使っていると、こうした説明をよく見かける。
+# ペイントソフトのレイヤーモードを数式で眺める
 
-でも、乗算は本当に何をしているのだろう。なぜ乗算は影に向いていて、スクリーンは光に向いているのだろう。オーバーレイは、何と何を重ねているのだろう。
+ペイントソフトのレイヤーモードは、「乗算は暗くなる」「スクリーンは明るくなる」といった感覚的な言葉で解説されることが多く、具体的な計算方法まで紹介されることはあまりない。
 
-この記事では、普段使っているレイヤーモードを、できるだけ数式として眺めてみる。対象は、少し理系寄りの絵描き・クリエイター。細かな実装を追いかけるのではなく、「このモードは画素にこういう計算をしているのか」と分かることを目指す。
-
-基本の基準には、CSSやSVGの画像合成を定義している[W3Cの画像合成・ブレンド仕様](https://www.w3.org/TR/compositing-1/)を使う。この仕様には、主要な16種類のブレンドモードと、色のブレンドおよびアルファ合成の数式が定義されている。
-
-そのうえで、Photoshopでよく見かける追加モードも補足する。ソフトによって同じ名前のモードの細部が違うことはあるが、まずは共通する計算の形をつかむことを優先する。
+それぞれの計算方法が分かれば、目的に合ったレイヤーモードを選びやすくなる。この記事では、普段使うレイヤーモードを数式で見て、各モードが画素にどのような計算をしているのかを整理する。
 
 ## この記事で扱うモード
 
 先に全体像を示しておく。モード名をクリックすると、それぞれの説明に移動できる。
-
-### W3Cの基本16種類
 
 | モード | 役割 |
 | --- | --- |
@@ -26,33 +20,28 @@ date: 2026-08-30
 | [比較（暗）](#mode-darken) | チャンネルごとに暗い方を選ぶ |
 | [乗算](#mode-multiply) | 色を掛けて暗くする |
 | [焼き込みカラー](#mode-color-burn) | 暗くしながらコントラストを強める |
+| [焼き込み（リニア）](#mode-linear-burn) | 暗い方向へ直線的に変化させる |
+| [カラー比較（暗）](#mode-darker-color) | 色全体が暗い方を選ぶ |
 | [比較（明）](#mode-lighten) | チャンネルごとに明るい方を選ぶ |
 | [スクリーン](#mode-screen) | 反転して掛けて明るくする |
 | [覆い焼きカラー](#mode-color-dodge) | 明るくしながらコントラストを変える |
+| [加算](#mode-add) | 色の値を足して明るくする |
+| [カラー比較（明）](#mode-lighter-color) | 色全体が明るい方を選ぶ |
 | [オーバーレイ](#mode-overlay) | 下の明暗で乗算とスクリーンを切り替える |
 | [ソフトライト](#mode-soft-light) | 明暗を穏やかに動かす |
 | [ハードライト](#mode-hard-light) | 上の明暗で乗算とスクリーンを切り替える |
-| [差の絶対値](#mode-difference) | 上下の色の差を取り出す |
-| [除外](#mode-exclusion) | 差の絶対値より弱い差分を作る |
-| [色相](#mode-hue) | 上の色相だけを借りる |
-| [彩度](#mode-saturation) | 上の彩度だけを借りる |
-| [カラー](#mode-color) | 上の色相と彩度を借りる |
-| [輝度](#mode-luminosity) | 上の明るさだけを借りる |
-
-### Photoshopでよく見る追加モード
-
-| モード | 役割 |
-| --- | --- |
-| [加算](#mode-add) | 色の値を足して明るくする |
-| [焼き込み（リニア）](#mode-linear-burn) | 暗い方向へ直線的に変化させる |
-| [減算](#mode-subtract) | 上の色を下の色から引く |
-| [除算](#mode-divide) | 下の色を上の色で割る |
-| [カラー比較（暗）](#mode-darker-color) | 色全体が暗い方を選ぶ |
-| [カラー比較（明）](#mode-lighter-color) | 色全体が明るい方を選ぶ |
 | [ビビッドライト](#mode-vivid-light) | 焼き込みと覆い焼きを切り替える |
 | [リニアライト](#mode-linear-light) | 明るさを直線的に強く動かす |
 | [ピンライト](#mode-pin-light) | 比較（暗）と比較（明）を切り替える |
 | [ハードミックス](#mode-hard-mix) | 各チャンネルをほぼ二値化する |
+| [差の絶対値](#mode-difference) | 上下の色の差を取り出す |
+| [除外](#mode-exclusion) | 差の絶対値より弱い差分を作る |
+| [減算](#mode-subtract) | 上の色を下の色から引く |
+| [除算](#mode-divide) | 下の色を上の色で割る |
+| [色相](#mode-hue) | 上の色相だけを借りる |
+| [彩度](#mode-saturation) | 上の彩度だけを借りる |
+| [カラー](#mode-color) | 上の色相と彩度を借りる |
+| [輝度](#mode-luminosity) | 上の明るさだけを借りる |
 
 ## レイヤーモードは「上下の色から新しい色を作る関数」
 
@@ -161,7 +150,7 @@ C_out = a_top' * C_mode + (1 - a_top') * C_base
 C_mode = C_top
 ```
 
-{% include blend-result.html mode="normal" label="通常" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="normal" label="通常" %}
 
 下のレイヤーが完全に不透明なら、上のレイヤーが100%不透明のときは上の色だけが見える。上が半透明なら、`C_top` と `C_base` の間になる。
 
@@ -177,7 +166,7 @@ C_mode = C_top
 C_mode = min(C_base, C_top)
 ```
 
-{% include blend-result.html mode="darken" label="比較（暗）" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="darken" label="比較（暗）" %}
 
 乗算と違って色を混ぜず、各チャンネルの小さい値を選ぶ。暗い線や影だけを残したいときに使われる。
 
@@ -189,7 +178,7 @@ C_mode = min(C_base, C_top)
 C_mode = C_base * C_top
 ```
 
-{% include blend-result.html mode="multiply" label="乗算" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="multiply" label="乗算" %}
 
 `0.0`〜`1.0` の範囲なら、結果は必ず入力の小さい方以下になる。白 `1.0` を掛けても相手の色がそのまま残り、黒 `0.0` を掛けると黒になる。
 
@@ -220,9 +209,39 @@ C_base < 1 かつ C_top > 0 のとき:
 C_mode = 1 - min(1, (1-C_base) / C_top)
 ```
 
-{% include blend-result.html mode="color-burn" label="焼き込みカラー" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="color-burn" label="焼き込みカラー" %}
 
 結果は通常 `0.0`〜`1.0` に収める。上の色が黒に近づくほど、下の色が急激に暗くなる。
+
+<a id="mode-linear-burn"></a>
+
+## 焼き込み（リニア）
+
+```text
+C_mode = max(0, C_base + C_top - 1)
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="linear-burn" label="焼き込み（リニア）" %}
+
+2つの色を足してから `1` を引くので、暗い方向へ直線的に変化する。減算と似て見えるが、式は異なる。
+
+<a id="mode-darker-color"></a>
+
+## カラー比較（暗）
+
+比較（暗）はチャンネルごとに比較するが、カラー比較（暗）は色全体の明るさを比較して、下か上のどちらか一方の色を選ぶ。
+
+```text
+sum(C_base) < sum(C_top) のとき:
+C_mode = C_base
+
+sum(C_base) >= sum(C_top) のとき:
+C_mode = C_top
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="darker-color" label="カラー比較（暗）" %}
+
+ここで `sum(C)` は、RGB各チャンネルの値を足したものとする。そのため、比較（暗）のようにチャンネルごとに別々の色を組み合わせることはない。
 
 <a id="mode-lighten"></a>
 
@@ -234,7 +253,7 @@ C_mode = 1 - min(1, (1-C_base) / C_top)
 C_mode = max(C_base, C_top)
 ```
 
-{% include blend-result.html mode="lighten" label="比較（明）" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="lighten" label="比較（明）" %}
 
 黒 `0.0` はほとんど何もせず、白 `1.0` はそのチャンネルを白にする。明るい線や光だけを重ねたいときに使える。
 
@@ -246,7 +265,7 @@ C_mode = max(C_base, C_top)
 C_mode = 1 - (1 - C_base) * (1 - C_top)
 ```
 
-{% include blend-result.html mode="screen" label="スクリーン" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="screen" label="スクリーン" %}
 
 展開すると、
 
@@ -283,9 +302,47 @@ C_base > 0 かつ C_top < 1 のとき:
 C_mode = min(1, C_base / (1-C_top))
 ```
 
-{% include blend-result.html mode="color-dodge" label="覆い焼きカラー" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="color-dodge" label="覆い焼きカラー" %}
 
 上の色が白に近づくほど、下の色が急激に明るくなる。強い光や発光の芯を作るのに向いているが、明るさが極端になりやすい。
+
+<a id="mode-add"></a>
+
+## 加算
+
+```text
+C_mode = C_base + C_top
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="add" label="加算" %}
+
+2つの色の光量を、そのまま足すと考えるモードである。明るい色同士を重ねると、すぐに白に近づく。
+
+表示できる範囲に収める場合は、一般に次のようになる。
+
+```text
+C_mode = min(1, C_base + C_top)
+```
+
+ソフトによっては別の名前で呼ばれることもあるが、同じ系統のモードとして扱われることが多い。
+
+<a id="mode-lighter-color"></a>
+
+## カラー比較（明）
+
+カラー比較（暗）の反対で、色全体の明るさが大きいほうを選ぶ。
+
+```text
+sum(C_base) > sum(C_top) のとき:
+C_mode = C_base
+
+sum(C_base) <= sum(C_top) のとき:
+C_mode = C_top
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="lighter-color" label="カラー比較（明）" %}
+
+比較（暗）と比較（明）の違いと同じように、チャンネル単位の比較ではなく、色全体の比較である。
 
 <a id="mode-overlay"></a>
 
@@ -301,7 +358,7 @@ C_base >= 0.5 のとき:
 C_mode = 1 - 2 * (1-C_base) * (1-C_top)
 ```
 
-{% include blend-result.html mode="overlay" label="オーバーレイ" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="overlay" label="オーバーレイ" %}
 
 暗い下地では乗算のように暗くなり、明るい下地ではスクリーンのように明るくなる。中間の `0.5` 付近を基準にコントラストを強める、と考えるとよい。
 
@@ -333,7 +390,7 @@ C_top > 0.5 のとき:
 C_mode = C_base + (2*C_top - 1) * (g(C_base)-C_base)
 ```
 
-{% include blend-result.html mode="soft-light" label="ソフトライト" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="soft-light" label="ソフトライト" %}
 
 式は少し長いが、見方は単純である。上の色が50%グレーより暗ければ下を暗くし、明るければ下を明るくする。
 
@@ -351,10 +408,73 @@ C_top >= 0.5 のとき:
 C_mode = 1 - 2 * (1-C_base) * (1-C_top)
 ```
 
-{% include blend-result.html mode="hard-light" label="ハードライト" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="hard-light" label="ハードライト" %}
 
 オーバーレイが「下の画像に光を当てる」感じなら、ハードライトは「上のレイヤーから強い光を当てる」感じである。
 
+<a id="mode-vivid-light"></a>
+
+## ビビッドライト
+
+上の色が暗いか明るいかで、焼き込みカラーと覆い焼きカラーを切り替える。
+
+```text
+C_top < 0.5 のとき:
+C_mode = 焼き込みカラー(C_base, 2*C_top)
+
+C_top >= 0.5 のとき:
+C_mode = 覆い焼きカラー(C_base, 2*(C_top-0.5))
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="vivid-light" label="ビビッドライト" %}
+
+コントラストの変化が強く、扱いも難しい。強い陰影や極端な光を作るためのモードと考えるとよい。
+
+<a id="mode-linear-light"></a>
+
+## リニアライト
+
+```text
+C_mode = clamp(C_base + 2*C_top - 1, 0, 1)
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="linear-light" label="リニアライト" %}
+
+上の色を2倍してから下の色に加える。50%グレーを基準に、明るい部分は明るく、暗い部分は暗くする。
+
+<a id="mode-pin-light"></a>
+
+## ピンライト
+
+上の色に応じて、比較（暗）または比較（明）に近い処理を切り替える。
+
+```text
+C_top < 0.5 のとき:
+C_mode = min(C_base, 2*C_top)
+
+C_top >= 0.5 のとき:
+C_mode = max(C_base, 2*C_top - 1)
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="pin-light" label="ピンライト" %}
+
+オーバーレイやソフトライトよりも、色の置き換わりが目立ちやすい。
+
+<a id="mode-hard-mix"></a>
+
+## ハードミックス
+
+```text
+C_base + C_top < 1 のとき:
+C_mode = 0
+
+C_base + C_top >= 1 のとき:
+C_mode = 1
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="hard-mix" label="ハードミックス" %}
+
+各チャンネルの結果を0か1に丸めるため、画像がほとんど二値化される。通常の塗りや調整より、ポスターのような極端な効果に向いている。
 <a id="mode-difference"></a>
 
 ## 差の絶対値
@@ -363,7 +483,7 @@ C_mode = 1 - 2 * (1-C_base) * (1-C_top)
 C_mode = abs(C_base - C_top)
 ```
 
-{% include blend-result.html mode="difference" label="差の絶対値" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="difference" label="差の絶対値" %}
 
 下と上の色の差を、絶対値にして取り出す。順番を入れ替えても結果は同じである。
 
@@ -391,9 +511,33 @@ abs(C_base - 1) = 1 - C_base
 C_mode = C_base + C_top - 2 * C_base * C_top
 ```
 
-{% include blend-result.html mode="exclusion" label="除外" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="exclusion" label="除外" %}
 
 黒 `0` では変化せず、白 `1` では色が反転する。中間の色では差の絶対値ほど強い差になりにくい。
+
+<a id="mode-subtract"></a>
+
+## 減算
+
+```text
+C_mode = max(0, C_base - C_top)
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="subtract" label="減算" %}
+
+上の色を下の色から引くモードである。焼き込み（リニア）と似て見えるが、減算は単純に `C_base - C_top` を計算する。
+
+<a id="mode-divide"></a>
+
+## 除算
+
+```text
+C_mode = min(1, C_base / C_top)
+```
+
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="divide" label="除算" %}
+
+下の色を上の色で割る。`C_top = 0` では式が定義できず、`0` に近いと結果が急激に大きくなるため、実際のソフトでは特別な扱いが入る。この例の画像では、ゼロで割るチャンネルは白 `1` としている。
 
 <a id="mode-hue"></a>
 
@@ -407,7 +551,7 @@ C_mode = C_base + C_top - 2 * C_base * C_top
 C_mode = HSL(H_top, S_base, L_base)
 ```
 
-{% include blend-result.html mode="hue" label="色相" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="hue" label="色相" %}
 
 RGBの赤・緑・青を直接掛けたり足したりするモードではない。「色味だけを変えたい」ときに使う。
 
@@ -421,7 +565,7 @@ RGBの赤・緑・青を直接掛けたり足したりするモードではな�
 C_mode = HSL(H_base, S_top, L_base)
 ```
 
-{% include blend-result.html mode="saturation" label="彩度" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="saturation" label="彩度" %}
 
 彩度の低い上の色を使うと、下の色を鮮やかさの少ない方向へ動かせる。
 
@@ -435,7 +579,7 @@ C_mode = HSL(H_base, S_top, L_base)
 C_mode = HSL(H_top, S_top, L_base)
 ```
 
-{% include blend-result.html mode="color" label="カラー" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="color" label="カラー" %}
 
 モノクロ画像に色を付けたり、線画や陰影の明るさを保ったまま着色したりするときに便利である。
 
@@ -449,164 +593,6 @@ C_mode = HSL(H_top, S_top, L_base)
 C_mode = HSL(H_base, S_base, L_top)
 ```
 
-{% include blend-result.html mode="luminosity" label="輝度" %}
+{% include blend-result-2026-09-24-layer-blending-modes.html mode="luminosity" label="輝度" %}
 
 カラーの反対側の使い方で、色味を保ったまま明るさだけを変えたいときに使える。
-
-ここまでが、W3Cの仕様で定義されている基本16種類である。ここからは、Photoshopでよく見かける追加モードを扱う。
-
-<a id="mode-add"></a>
-
-## 加算
-
-```text
-C_mode = C_base + C_top
-```
-
-{% include blend-result.html mode="add" label="加算" %}
-
-2つの色の光量を、そのまま足すと考えるモードである。明るい色同士を重ねると、すぐに白に近づく。
-
-表示できる範囲に収める場合は、一般に次のようになる。
-
-```text
-C_mode = min(1, C_base + C_top)
-```
-
-ソフトによっては別の名前で呼ばれることもあるが、同じ系統のモードとして扱われることが多い。
-
-<a id="mode-linear-burn"></a>
-
-## 焼き込み（リニア）
-
-```text
-C_mode = max(0, C_base + C_top - 1)
-```
-
-{% include blend-result.html mode="linear-burn" label="焼き込み（リニア）" %}
-
-2つの色を足してから `1` を引くので、暗い方向へ直線的に変化する。減算と似て見えるが、式は異なる。
-
-<a id="mode-subtract"></a>
-
-## 減算
-
-```text
-C_mode = max(0, C_base - C_top)
-```
-
-{% include blend-result.html mode="subtract" label="減算" %}
-
-上の色を下の色から引くモードである。焼き込み（リニア）と似て見えるが、減算は単純に `C_base - C_top` を計算する。
-
-<a id="mode-divide"></a>
-
-## 除算
-
-```text
-C_mode = min(1, C_base / C_top)
-```
-
-{% include blend-result.html mode="divide" label="除算" %}
-
-下の色を上の色で割る。`C_top = 0` では式が定義できず、`0` に近いと結果が急激に大きくなるため、実際のソフトでは特別な扱いが入る。この例の画像では、ゼロで割るチャンネルは白 `1` としている。
-
-<a id="mode-darker-color"></a>
-
-## カラー比較（暗）
-
-比較（暗）はチャンネルごとに比較するが、カラー比較（暗）は色全体の明るさを比較して、下か上のどちらか一方の色を選ぶ。
-
-```text
-sum(C_base) < sum(C_top) のとき:
-C_mode = C_base
-
-sum(C_base) >= sum(C_top) のとき:
-C_mode = C_top
-```
-
-{% include blend-result.html mode="darker-color" label="カラー比較（暗）" %}
-
-ここで `sum(C)` は、RGB各チャンネルの値を足したものとする。そのため、比較（暗）のようにチャンネルごとに別々の色を組み合わせることはない。
-
-<a id="mode-lighter-color"></a>
-
-## カラー比較（明）
-
-カラー比較（暗）の反対で、色全体の明るさが大きいほうを選ぶ。
-
-```text
-sum(C_base) > sum(C_top) のとき:
-C_mode = C_base
-
-sum(C_base) <= sum(C_top) のとき:
-C_mode = C_top
-```
-
-{% include blend-result.html mode="lighter-color" label="カラー比較（明）" %}
-
-比較（暗）と比較（明）の違いと同じように、チャンネル単位の比較ではなく、色全体の比較である。
-
-<a id="mode-vivid-light"></a>
-
-## ビビッドライト
-
-上の色が暗いか明るいかで、焼き込みカラーと覆い焼きカラーを切り替える。
-
-```text
-C_top < 0.5 のとき:
-C_mode = 焼き込みカラー(C_base, 2*C_top)
-
-C_top >= 0.5 のとき:
-C_mode = 覆い焼きカラー(C_base, 2*(C_top-0.5))
-```
-
-{% include blend-result.html mode="vivid-light" label="ビビッドライト" %}
-
-コントラストの変化が強く、扱いも難しい。強い陰影や極端な光を作るためのモードと考えるとよい。
-
-<a id="mode-linear-light"></a>
-
-## リニアライト
-
-```text
-C_mode = clamp(C_base + 2*C_top - 1, 0, 1)
-```
-
-{% include blend-result.html mode="linear-light" label="リニアライト" %}
-
-上の色を2倍してから下の色に加える。50%グレーを基準に、明るい部分は明るく、暗い部分は暗くする。
-
-<a id="mode-pin-light"></a>
-
-## ピンライト
-
-上の色に応じて、比較（暗）または比較（明）に近い処理を切り替える。
-
-```text
-C_top < 0.5 のとき:
-C_mode = min(C_base, 2*C_top)
-
-C_top >= 0.5 のとき:
-C_mode = max(C_base, 2*C_top - 1)
-```
-
-{% include blend-result.html mode="pin-light" label="ピンライト" %}
-
-オーバーレイやソフトライトよりも、色の置き換わりが目立ちやすい。
-
-<a id="mode-hard-mix"></a>
-
-## ハードミックス
-
-```text
-C_base + C_top < 1 のとき:
-C_mode = 0
-
-C_base + C_top >= 1 のとき:
-C_mode = 1
-```
-
-{% include blend-result.html mode="hard-mix" label="ハードミックス" %}
-
-各チャンネルの結果を0か1に丸めるため、画像がほとんど二値化される。通常の塗りや調整より、ポスターのような極端な効果に向いている。
