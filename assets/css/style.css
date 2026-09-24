@@ -65,3 +65,50 @@ h3 {
   color: #666;
   font-variant-numeric: tabular-nums;
 }
+
+.post-header {
+  margin-bottom: 2rem;
+}
+
+.post-header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.post-share {
+  margin: 1rem 0 0;
+}
+
+.post-share-divider {
+  border: 0;
+  border-top: 1px solid #e5e5e5;
+  margin-top: 2rem;
+}
+
+.blend-comparison {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.blend-comparison figure {
+  margin: 0;
+}
+
+.blend-comparison img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+
+.blend-comparison figcaption {
+  color: #666;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+@media (max-width: 32rem) {
+  .blend-comparison {
+    grid-template-columns: 1fr;
+  }
+}
