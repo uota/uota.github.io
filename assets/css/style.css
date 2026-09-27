@@ -115,6 +115,6 @@ h3 {
 
 @media (max-width: 32rem) {
   .blend-comparison {
-    grid-template-columns: 1fr;
+    gap: 0.5rem;
   }
 }
